@@ -1,0 +1,167 @@
+---
+title: "Tarea IV - Grupo 12"
+author: "Natalia Villafan - Florencia Diverio - Magela Tarela"
+date: last-modified
+execute:
+  warning: false
+format:
+  html:
+    embed-resources: true
+    code-overflow: wrap
+    title-block-banner: "#f0c2d1"
+    title-block-banner-color: "white"
+---
+
+```{r}
+#| output: FALSE
+
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(viridis)
+library(plotly)
+library(haven)
+library(dplyr)
+library(srvyr)
+
+```
+
+# ***Preparación inicial***
+
+
+```{r}
+#| output: FALSE
+
+s = read_sav('P_2019_Terceros.sav')
+s = s %>%
+filter(dpto != 1) %>% # Excluye Montevideo
+transmute(
+numero,
+nper,
+dpto,
+nomdpto,
+sexo = e26,
+edad = e27,
+ingreso = PT1,
+ocupado = case_when(pobpcoac == 2 ~ 1, TRUE ~ 0),
+desocupado = case_when(pobpcoac >= 3 & pobpcoac <= 5 ~ 1, TRUE ~ 0),
+pet = case_when(edad >= 14 ~ 1, TRUE ~ 0),
+activo = ocupado + desocupado,
+pobreza = pobre06,
+w = pesoano
+)
+info_design = read_sav('ESTRATO_UPM_ECH2019.sav')
+s = s |> left_join(info_design)
+```
+
+
+## ***Punto 1 - Diseño muestral***
+
+```{r}
+#| output: FALSE
+
+design_srvyr <- s %>%
+as_survey_design(
+ids = upm_fic,
+strata = estrato,
+weights = w,
+nest = TRUE
+)
+
+
+```
+
+## ***Punto 2 - Tasa de desempleo***
+
+### ***Punto 2.1 -  Tasa de desempleo para el total del interior***
+
+```{r}
+#| output: FALSE
+
+design_srvyr |> 
+  summarise(tdesempleo=survey_ratio(desocupado,
+                            pet, 
+                            vartype = c('cv','ci'),
+                            deff=TRUE
+                            )
+            )
+```
+```{r}
+#| output: FALSE
+
+design_srvyr |> 
+  group_by(dpto) |>
+  summarise(tdesempleo=survey_ratio(desocupado,
+                            pet, 
+                            vartype = c('cv','ci'),
+                            deff=TRUE
+                            )
+            )
+```
+
+```{r}
+#| output: FALSE
+
+#AGREGAR COMENTARIOS
+
+```
+
+### ***Punto 3 - Proporción de personas bajo la línea de pobreza***
+
+```{r}
+#| output: FALSE
+
+design_srvyr |>
+  summarise(prop_lp=survey_mean(pobreza,
+                            vartype = c('cv','ci')
+                            ),
+            cant_casos=unweighted(n()),
+            prop_lps_raw= unweighted(mean(pobreza))
+            )
+  
+```
+
+```{r}
+
+#| output: FALSE
+
+#POR DEPARTAMENTO:
+
+design_srvyr |>
+  group_by(dpto) |> 
+  summarise(prop_lp=survey_mean(pobreza,
+                            vartype = c('cv','ci')
+                            ),
+            cant_casos=unweighted(n()),
+            prop_lps_raw= unweighted(mean(pobreza))
+            )
+```
+
+```{r}
+
+# AGREGAR COMENTARIOS
+```
+
+
+### ***Punto 4 - Ingreso promedio por departamento (mujeres 30–45 años)***
+
+```{r}
+
+
+design_srvyr |>
+  group_by(dpto, nomdpto) |>
+  filter(sexo==2, (edad>=30 & edad<=45)) |> 
+  summarise(tp=survey_mean(ingreso,
+                            vartype = c('cv','ci'),
+                            deff=TRUE
+                            )
+            )
+```
+
+```{r}
+# comentarios:
+
+cat("Las estimaciones del ingreso medio para la población de mujeres de 30 a 45 años, desagregadas por departamento, presentan coeficientes de variación (CV) inferiores al 10%. De acuerdo con los criterios estándar de calidad analítica, estos resultados se clasifican entre las categorías de Excelente (CV < 5%) y Muy Bueno (5% <= CV < 10%). Esto demuestra que, a pesar del nivel de desagregación muestral aplicado, las estimaciones mantienen una alta precisión, estabilidad y representatividad, siendo aptas para su publicación y uso en el análisis ejecutivo.")
+```
+
